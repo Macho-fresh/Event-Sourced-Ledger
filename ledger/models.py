@@ -92,12 +92,12 @@ class BalanceProjection(models.Model):
 
     balance_kobo = models.BigIntegerField(default=0)
 
-    last_processed_event = models.ForeignKey(
-        LedgerEvents,
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True
-    )
+    # last_processed_event = models.ForeignKey(
+    #     LedgerEvents,
+    #     on_delete=models.PROTECT,
+    #     null=True,
+    #     blank=True
+    # )
 
     updated_at = models.DateTimeField(auto_now=True)
 
