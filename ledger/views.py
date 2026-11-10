@@ -1,8 +1,90 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from .models import *
+from rest_framework.response import Response
+from rest_framework import status
+import uuid
 
-# class CreatEvents(APIView):
-#     permission_classes = [IsAuthenticated]
-#     def post(self, request):
 
+class RegisterView(APIView):
+    def post(self, request):
+        username = request.data.get('username')
+        email = request.data.get('email')
+        password = request.data.get('password')
+
+        User.objects.create(
+            username = username,
+            password = password,
+            email = email
+        )
+
+        return Response({
+            'message': 'User created successfully'
+        }, status = status.HTTP_201_CREATED)
+
+with transaction.atomic():
+    class CreatAccountView(APIView):
+        permission_classes = [IsAuthenticated]
+        def post(self, request):
+            user = request.user
+            currency = request.data.get('currency')
+            
+            account = Account.objects.create(
+                owner = user,
+                currency = currency
+            )
+
+            BalanceProjection.objects.create(
+                account = account,
+                balance_kobo = 0
+            )
+
+            return Response({
+                'message': 'Account created successfully'
+            }, status = status.HTTP_201_CREATED)
+
+
+class DepositView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        event_type = request.data.get('event_type')
+        amount = request.data.get('amount')
+        from_account_id = request.data.get('from_account_id')
+        to_account_id = request.data.get('to_account_id')
+
+        idempotency_key = str(uuid.uuid4())
+
+        from_account = Account.objects.get(id=from_account_id)
+        to_account = Account.objects.get(id=to_account_id)
+
+        if amount > 0:
+            amount_kobo = amount * 100
+
+        keys = Account.objects.all()
+        for i in keys:
+            if keys.idempotency_key == idempotency_key:
+                return Response({
+                    'error': 'something went wrong, try again'
+                }, status=status.HTTP_406_NOT_ACCEPTABLE)
+            
+
+        if event_type == 'deposit' and request.user == from_account.owner:
+            transfer = Transfer.objects.create(
+                idempotency_key = idempotency_key,
+                from_account = from_account,
+                to_account = to_account,
+                amount_kobo = amount_kobo
+            )
+
+            LedgerEvents.objects.create(
+                event_type = event_type,
+                account = from_account,
+                amount_kobo = amount_kobo,
+                transfer = transfer,
+
+            )
+            return Response({
+                'message': 'Deposit Successfull'
+            },status = status.HTTP_202_ACCEPTED)
