@@ -51,40 +51,44 @@ class DepositView(APIView):
     def post(self, request):
         event_type = request.data.get('event_type')
         amount = request.data.get('amount')
-        from_account_id = request.data.get('from_account_id')
-        to_account_id = request.data.get('to_account_id')
+        account_id = request.data.get('account_id')
 
         idempotency_key = str(uuid.uuid4())
 
-        from_account = Account.objects.get(id=from_account_id)
-        to_account = Account.objects.get(id=to_account_id)
+        account = Account.objects.get(id=account_id)
 
         if amount > 0:
             amount_kobo = amount * 100
 
         keys = Account.objects.all()
         for i in keys:
-            if keys.idempotency_key == idempotency_key:
+            if i.idempotency_key == idempotency_key:
                 return Response({
                     'error': 'something went wrong, try again'
                 }, status=status.HTTP_406_NOT_ACCEPTABLE)
             
 
-        if event_type == 'deposit' and request.user == from_account.owner:
-            transfer = Transfer.objects.create(
-                idempotency_key = idempotency_key,
-                from_account = from_account,
-                to_account = to_account,
-                amount_kobo = amount_kobo
-            )
+        if event_type == 'deposit' and request.user == account.owner:
 
             LedgerEvents.objects.create(
                 event_type = event_type,
-                account = from_account,
+                account = account,
                 amount_kobo = amount_kobo,
-                transfer = transfer,
-
             )
+
+            BalanceProjection.objects.create(
+                account = account,
+                balance_kobo = amount_kobo
+            )
+            
             return Response({
                 'message': 'Deposit Successfull'
             },status = status.HTTP_202_ACCEPTED)
+
+class TransferView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        event_type = request.data.get('event_type')
+        amount = request.data.get('amount')
+        from_account_id = request.data.get('from_account_id')
+        to_account_id = request.data.get('to_account_id')
