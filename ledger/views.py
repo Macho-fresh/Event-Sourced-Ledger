@@ -6,6 +6,7 @@ from .models import *
 from rest_framework.response import Response
 from rest_framework import status
 import uuid
+from .serializer import EventSerializer
 
 
 class RegisterView(APIView):
@@ -157,3 +158,21 @@ class GetBalanceView(APIView):
             },status=status.HTTP_401_UNAUTHORIZED)
 
 #  create serializer for the event_history endpoint
+
+class EventHistory(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        account_id = request.data.get('account_id')
+
+        account = Account.objects.get(id=account_id)
+        if LedgerEvents.objects.filter(account = account):
+            events = LedgerEvents.objects.filter(account = account)
+            serializer = EventSerializer(events, many=True)
+            return Response({
+                'message': 'Events retrieved successfully',
+                'data': serializer.data
+            },status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'error': 'This account doesnt have any events yet..'
+            },status=status.HTTP_404_NOT_FOUND)
